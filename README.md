@@ -33,9 +33,9 @@
 
 ## 使用
 
-1. 从 [Releases](https://github.com/qlcncn/QuickLook.Plugin.PcapViewer/releases) 页面下载最新的插件包
+~1. 从 [Releases](https://github.com/qlcncn/QuickLook.Plugin.PcapViewer/releases) 页面下载最新的插件包
 2. 将插件压缩包复制到 QuickLook 安装路径下的插件目录 `<QuickLook_Dir>\Plugins\` 解压
-3. 重启 QuickLook 即可生效
+3. 重启 QuickLook 即可生效~
 
 ### 手动构建
 
