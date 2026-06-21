@@ -15,9 +15,13 @@
 
 - **快速预览** — 在资源管理器中选中 `.pcap` 文件，按下空格键即可预览
 - **多协议支持** — 解析 TCP、UDP、ICMP 协议的网络流量
+- **IPv4/IPv6 双栈** — 完整支持 IPv4 和 IPv6 流量
+- **封装协议** — 自动解析 VLAN (802.1Q)、VXLAN、GRE 隧道（支持 IPv6 over IPv4 等组合模式）
+- **ICMPv6** — 支持 ICMPv6 协议
+- **应用层协议识别** — 自动识别 HTTP、DNS、TLS 等应用层协议并显示在信息栏
 - **多种编码视图** — 支持 UTF-8、ASCII、HexRaw、HexDump、GBK 等编码显示
-- **请求/响应区分** — 以类似wireshark的经典红蓝色区分客户端请求和服务端响应
-- **信息栏显示** — 顶部显示协议类型、源地址 → 目的地址
+- **请求/响应区分** — 以类似 Wireshark 的经典红蓝色区分客户端请求和服务端响应
+- **信息栏显示** — 顶部显示协议类型（含 IPv6/VXLAN/应用层协议标识）、源地址 → 目的地址
 
 ## 截图
 
@@ -26,7 +30,6 @@
 
 ### 预览 UDP 流量 & 切换编码视图
 ![dns_hexdump](img/dns_hexdump.png)
-
 
 ## 使用
 
@@ -50,19 +53,29 @@ dotnet build -c Release
 # 把 QuickLook.Plugin.PcapViewer 目录直接拷贝到 QuickLook 安装路径下的插件目录 <QuickLook_Dir>\Plugins\
 ```
 
+## 测试
+
+```bash
+dotnet test
+```
+
+基于 `test_pcaps/` 目录下的样本文件运行 123 个单元测试，覆盖 PcapReader、PcapPacketParser、SessionIdentifier、TcpStreamReassembler、HttpParser、HexConverters 等核心模块。
+
 ## 限制说明
 
 - 仅支持经典 pcap 格式（magic `0xa1b2c3d4` / `0xa1b23c4d`），不支持 pcapng 格式
-- 仅支持 **IPv4** 协议，暂不支持 IPv6（抽空再搞）
 - 仅支持 **Ethernet** 链路层类型
-- 仅支持单会话（**TCP** 是第一个有三次握手的会话，**UDP/ICMP** 是第一对IP对）
+- 仅支持单会话（**TCP** 是第一个有三次握手的会话，**UDP/ICMP** 是第一对 IP 对）
 - Payload 数据上限为 **1 MB**，超过部分将被截断并显示 `[TRUNCATED > 1MB]` 标记
 
 ## TODO
 
-- IPv6 支持
 - DNS、TLS 重要字段提取展示
-- 应用层协议识别展示
+
+## 依赖
+
+- [QuickLook.Common](https://www.nuget.org/packages/QuickLook.Common/) v4.5.0
+- [PacketDotNet](https://www.nuget.org/packages/PacketDotNet/) v1.4.7
 
 ## 原始项目
 

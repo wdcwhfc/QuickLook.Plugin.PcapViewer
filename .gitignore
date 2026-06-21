@@ -3,6 +3,7 @@ bin/
 obj/
 Release/
 Debug/
+Build/
 
 # IDE 文件
 .vscode/
@@ -21,5 +22,10 @@ packages/
 .DS_Store
 Thumbs.db
 
+# 本地临时文件
 *.pcap
 AGENTS.md
+temp/*
+
+# 单元测试项目
+QuickLook.Plugin.PcapViewer.Tests/

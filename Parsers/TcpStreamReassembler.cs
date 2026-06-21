@@ -15,29 +15,23 @@ internal static class TcpStreamReassembler
         var clientSegments = new List<Segment>();
         var serverSegments = new List<Segment>();
 
-        var ethOff = 0;
-
         foreach (var pkt in tcpPackets)
         {
-            var etherType = PacketHeaderParser.ParseEthernet(pkt.Data, out ethOff);
-            if (etherType == 0) continue;
+            var info = PcapPacketParser.Parse(pkt.Data);
+            if (info == null) continue;
+            if (info.TransportProtocol != TransportProtocol.TCP) continue;
+            if (info.TcpHeaderLength == 0 || info.TcpPayload == null || info.TcpPayload.Length == 0) continue;
 
-            var protocol = PacketHeaderParser.ParseIPv4(pkt.Data, ethOff,
-                out _, out _, out _, out _, out var l4Offset);
-            if (protocol != PacketHeaderParser.TcpProtocol) continue;
-
-            PacketHeaderParser.ParseTcp(pkt.Data, l4Offset,
-                out _, out _, out var seqNum, out _, out _, out var tcpDataOff, out var dataLen);
-
-            if (tcpDataOff == 0 || dataLen == 0) continue;
-
-            var payload = new byte[dataLen];
-            Buffer.BlockCopy(pkt.Data, l4Offset + tcpDataOff, payload, 0, dataLen);
+            var segment = new Segment
+            {
+                Seq = info.TcpSeqNum,
+                Data = info.TcpPayload,
+            };
 
             if (pkt.IsFromClientToServer)
-                clientSegments.Add(new Segment { Seq = seqNum, Data = payload });
+                clientSegments.Add(segment);
             else
-                serverSegments.Add(new Segment { Seq = seqNum, Data = payload });
+                serverSegments.Add(segment);
         }
 
         clientSegments.Sort((a, b) => a.Seq.CompareTo(b.Seq));

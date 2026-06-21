@@ -11,6 +11,7 @@
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
         <PlatformTarget>AnyCPU</PlatformTarget>
         <Platforms>AnyCPU;x64;ARM64</Platforms>
+        <DefaultItemExcludes>$(DefaultItemExcludes);QuickLook.Plugin.PcapViewer.Tests\**</DefaultItemExcludes>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
@@ -33,7 +34,14 @@
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="PacketDotNet" Version="1.4.7" />
       <PackageReference Include="QuickLook.Common" Version="4.5.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+        <_Parameter1>QuickLook.Plugin.PcapViewer.Tests</_Parameter1>
+      </AssemblyAttribute>
     </ItemGroup>
 
 </Project>

@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using QuickLook.Plugin.PcapViewer.Models;
 using QuickLook.Plugin.PcapViewer.Parsers;
 using QuickLook.Plugin.PcapViewer.UI.Converters;
 
@@ -21,10 +23,10 @@ public partial class PcapViewerControl : UserControl, IDisposable
         public bool IsFromClientToServer;
     }
 
-    private static readonly Brush RequestForeground = new SolidColorBrush(Color.FromRgb(0x7F, 0x00, 0x00));     // #7f0000
-    private static readonly Brush RequestBackground = new SolidColorBrush(Color.FromRgb(0xFB, 0xED, 0xED));     // #fbeded
-    private static readonly Brush ResponseForeground = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x7F));    // #00007f
-    private static readonly Brush ResponseBackground = new SolidColorBrush(Color.FromRgb(0xED, 0xED, 0xFB));    // #ededfb
+    private static readonly Brush RequestForeground = new SolidColorBrush(Color.FromRgb(0x7F, 0x00, 0x00));
+    private static readonly Brush RequestBackground = new SolidColorBrush(Color.FromRgb(0xFB, 0xED, 0xED));
+    private static readonly Brush ResponseForeground = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x7F));
+    private static readonly Brush ResponseBackground = new SolidColorBrush(Color.FromRgb(0xED, 0xED, 0xFB));
 
     public PcapViewerControl()
     {
@@ -64,13 +66,13 @@ public partial class PcapViewerControl : UserControl, IDisposable
                     break;
             }
 
-            // Build info bar
             var src = GetSourceString(result);
             var dst = GetDestString(result);
             var proto = GetProtocolString(result);
+            var appProto = GetAppProtocolString(result);
             ProtocolIcon.Text = proto;
 
-            var info = $"{proto}  |  {src}  \u2192  {dst}";
+            var info = $"{proto}  {appProto}  |  {src}  \u2192  {dst}";
             if (_isTruncated)
                 info += "  [TRUNCATED > 1MB]";
             InfoText.Text = info;
@@ -89,24 +91,16 @@ public partial class PcapViewerControl : UserControl, IDisposable
 
         foreach (var pkt in result.TcpPackets)
         {
-            var etherType = PacketHeaderParser.ParseEthernet(pkt.Data, out var ethOff);
-            if (etherType == 0) continue;
+            var info = PcapPacketParser.Parse(pkt.Data);
+            if (info == null) continue;
+            if (info.TransportProtocol != TransportProtocol.TCP) continue;
+            if (info.TcpHeaderLength == 0) continue;
 
-            var protocol = PacketHeaderParser.ParseIPv4(pkt.Data, ethOff,
-                out _, out _, out var ipHeaderLen, out var ipTotalLen, out var l4Offset);
-            if (protocol != PacketHeaderParser.TcpProtocol) continue;
-
-            PacketHeaderParser.ParseTcp(pkt.Data, l4Offset,
-                out _, out _, out _, out _, out var flags, out var tcpHeaderLen, out _);
-
-            // Use IP Total Length to avoid Ethernet padding bytes
-            int actualPayloadLen = Math.Max(0, ipTotalLen - ipHeaderLen - tcpHeaderLen);
+            int actualPayloadLen = info.TcpPayload?.Length ?? 0;
             if (actualPayloadLen <= 0) continue;
-            if ((flags & PacketHeaderParser.TcpSyn) != 0) continue;
+            if ((info.TcpFlags & PacketHeaderParser.TcpSyn) != 0) continue;
 
-            var payload = new byte[actualPayloadLen];
-            Buffer.BlockCopy(pkt.Data, l4Offset + tcpHeaderLen, payload, 0, actualPayloadLen);
-            AddPayload(payload, pkt.IsFromClientToServer);
+            AddPayload(info.TcpPayload, pkt.IsFromClientToServer, actualPayloadLen);
         }
     }
 
@@ -116,24 +110,14 @@ public partial class PcapViewerControl : UserControl, IDisposable
 
         foreach (var pkt in result.TcpPackets)
         {
-            var etherType = PacketHeaderParser.ParseEthernet(pkt.Data, out var ethOff);
-            if (etherType == 0) continue;
+            var info = PcapPacketParser.Parse(pkt.Data);
+            if (info == null) continue;
+            if (info.TransportProtocol != TransportProtocol.UDP) continue;
 
-            var protocol = PacketHeaderParser.ParseIPv4(pkt.Data, ethOff,
-                out _, out _, out _, out _, out var l4Offset);
-            if (protocol != PacketHeaderParser.UdpProtocol) continue;
-
-            PacketHeaderParser.ParseUdp(pkt.Data, l4Offset,
-                out _, out _, out var length);
-
-            int payloadLen = length - PacketHeaderParser.UdpHeaderSize;
+            int payloadLen = info.UdpPayload?.Length ?? 0;
             if (payloadLen <= 0) continue;
 
-            int payloadOffset = l4Offset + PacketHeaderParser.UdpHeaderSize;
-            var payload = new byte[payloadLen];
-            Buffer.BlockCopy(pkt.Data, payloadOffset, payload, 0,
-                Math.Min(payloadLen, pkt.Data.Length - payloadOffset));
-            AddPayload(payload, pkt.IsFromClientToServer);
+            AddPayload(info.UdpPayload, pkt.IsFromClientToServer, payloadLen);
         }
     }
 
@@ -143,27 +127,18 @@ public partial class PcapViewerControl : UserControl, IDisposable
 
         foreach (var pkt in result.TcpPackets)
         {
-            var etherType = PacketHeaderParser.ParseEthernet(pkt.Data, out var ethOff);
-            if (etherType == 0) continue;
+            var info = PcapPacketParser.Parse(pkt.Data);
+            if (info == null) continue;
+            if (info.TransportProtocol != TransportProtocol.ICMP) continue;
 
-            PacketHeaderParser.ParseIPv4(pkt.Data, ethOff,
-                out _, out _, out _, out _, out var l4Offset);
-
-            PacketHeaderParser.ParseIcmp(pkt.Data, l4Offset,
-                out _, out _, out var icmpHeaderSize);
-
-            int payloadLen = pkt.Data.Length - l4Offset - icmpHeaderSize;
+            int payloadLen = info.IcmpPayload?.Length ?? 0;
             if (payloadLen <= 0) continue;
 
-            int payloadOffset = l4Offset + icmpHeaderSize;
-            var payload = new byte[payloadLen];
-            Buffer.BlockCopy(pkt.Data, payloadOffset, payload, 0,
-                Math.Min(payloadLen, pkt.Data.Length - payloadOffset));
-            AddPayload(payload, pkt.IsFromClientToServer);
+            AddPayload(info.IcmpPayload, pkt.IsFromClientToServer, payloadLen);
         }
     }
 
-    private void AddPayload(byte[] payload, bool isFromClientToServer)
+    private void AddPayload(byte[] payload, bool isFromClientToServer, int length)
     {
         const int maxTotal = 1_000_000;
         if (_totalBytes >= maxTotal)
@@ -173,13 +148,12 @@ public partial class PcapViewerControl : UserControl, IDisposable
         }
 
         int remaining = maxTotal - (int)_totalBytes;
-        int copyLen = Math.Min(remaining, payload.Length);
+        int copyLen = Math.Min(remaining, Math.Min(length, payload.Length));
         if (copyLen <= 0) return;
 
         var chunkData = new byte[copyLen];
         Buffer.BlockCopy(payload, 0, chunkData, 0, copyLen);
 
-        // Merge with last chunk if same direction
         if (_payloadChunks.Count > 0 &&
             _payloadChunks[_payloadChunks.Count - 1].IsFromClientToServer == isFromClientToServer)
         {
@@ -210,9 +184,9 @@ public partial class PcapViewerControl : UserControl, IDisposable
         switch (result.Type)
         {
             case IdentifyResult.ResultType.Tcp:
-                return $"{result.TcpSrcIP}:{result.TcpSrcPort}";
+                return FormatAddress(result.TcpSrcIP, result.TcpSrcPort);
             case IdentifyResult.ResultType.Udp:
-                return $"{result.UdpSrcIP}:{result.UdpSrcPort}";
+                return FormatAddress(result.UdpSrcIP, result.UdpSrcPort);
             case IdentifyResult.ResultType.Icmp:
                 return result.IcmpSrcIP?.ToString() ?? "?";
             default:
@@ -225,9 +199,9 @@ public partial class PcapViewerControl : UserControl, IDisposable
         switch (result.Type)
         {
             case IdentifyResult.ResultType.Tcp:
-                return $"{result.TcpDstIP}:{result.TcpDstPort}";
+                return FormatAddress(result.TcpDstIP, result.TcpDstPort);
             case IdentifyResult.ResultType.Udp:
-                return $"{result.UdpDstIP}:{result.UdpDstPort}";
+                return FormatAddress(result.UdpDstIP, result.UdpDstPort);
             case IdentifyResult.ResultType.Icmp:
                 return result.IcmpDstIP?.ToString() ?? "?";
             default:
@@ -235,15 +209,32 @@ public partial class PcapViewerControl : UserControl, IDisposable
         }
     }
 
+    private static string FormatAddress(System.Net.IPAddress ip, int port)
+    {
+        if (ip == null) return "?";
+        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+            return $"[{ip}]:{port}";
+        return $"{ip}:{port}";
+    }
+
     private static string GetProtocolString(IdentifyResult result)
     {
+        var ipTag = result.IpVersion == 6 ? "6" : "";
+        var vxlanTag = result.IsVxlan ? "VXLAN\u2192" : "";
         return result.Type switch
         {
-            IdentifyResult.ResultType.Tcp => "TCP",
-            IdentifyResult.ResultType.Udp => "UDP",
-            IdentifyResult.ResultType.Icmp => "ICMP",
+            IdentifyResult.ResultType.Tcp => $"{vxlanTag}TCP{ipTag}",
+            IdentifyResult.ResultType.Udp => $"{vxlanTag}UDP{ipTag}",
+            IdentifyResult.ResultType.Icmp => result.IsIcmpV6 ? "ICMPv6" : "ICMP",
             _ => "?",
         };
+    }
+
+    private static string GetAppProtocolString(IdentifyResult result)
+    {
+        var app = result.AppProtocol;
+        if (string.IsNullOrEmpty(app)) return "";
+        return $"[{app}]";
     }
 
     private void EncodingTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)

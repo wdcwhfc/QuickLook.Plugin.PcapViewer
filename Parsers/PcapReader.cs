@@ -29,12 +29,12 @@ internal sealed class PcapReader : IDisposable
         if (magic != MagicMicro && magic != MagicNano)
             throw new InvalidDataException("Not a valid pcap file (invalid magic number).");
 
-        _reader.ReadUInt16();
-        _reader.ReadUInt16();
-        _reader.ReadInt32();
-        _reader.ReadUInt32();
-        _reader.ReadUInt32();
-        _linkLayerType = _reader.ReadInt32();
+        _reader.ReadUInt16();   // version_major（版本主号）
+        _reader.ReadUInt16();   // version_minor（版本次号）
+        _reader.ReadInt32();    // thiszone（时区偏移）
+        _reader.ReadUInt32();   // sigfigs（时间戳精度）
+        _reader.ReadUInt32();   // snaplen（抓包长度）
+        _linkLayerType = _reader.ReadInt32();  // 1 = Ethernet; 101 = Raw IP; 113 = Linux cooked-mode capture
 
         _nextPacketOffset = _reader.BaseStream.Position;
     }
